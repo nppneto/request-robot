@@ -40,11 +40,11 @@ class Api
         $this->success_count = 0;
         $this->errors_count = 0;
 
-        $this->http_header = array(
-            'accept:application/json',
-            'content-type:application/json',
-            'cache-control:no-cache',
-        );
+        $this->http_header = [
+            'Accept:application/json',
+            'Content-Type:application/json',
+            'Cache-Control:no-cache',
+        ];
     }
 
     protected function initCurl()
