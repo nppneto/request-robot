@@ -12,21 +12,28 @@ class Api
     const NOT_FOUND = 404;
     const INTERNAL_ERROR = 500;
 
+    const DEFAULT_REQUEST_COUNT = 10;
+    const DEFAULT_HOST = 'localhost:8000';
+
     protected $curl = null;
     protected $token = null;
     protected $http_header = null;
+    protected $credentials = null;
     protected $host = null;
     protected $request_count = null;
     protected $success_count = null;
     protected $errors_count = null;
 
-    protected $credentials = array(
-        'email' => 'fabio.198@gmail.com',
-        'password' => '123456',
-    );    
+    protected static $status_list = [
+        self::SUCCESS => 'Sucesso',
+        self::UNAUTHORIZED => 'Não autorizado',
+        self::NOT_FOUND => 'Não encontrado',
+        self::INTERNAL_ERROR => 'Erro interno do servidor',
+    ];
 
-    public function __construct($host, $request_count) 
+    public function __construct($credentials, $host, $request_count) 
     {
+        $this->credentials = $credentials;
         $this->host = $host;
         $this->request_count = $request_count;
 
@@ -38,52 +45,6 @@ class Api
             'content-type:application/json',
             'cache-control:no-cache',
         );
-    }
-
-    public function generateRequests()
-    {
-        if (is_null($this->token)) {
-            $this->makeLogin();
-        }
-
-        Message::displayMessage(sprintf('Fazendo requisições com o usuário: %s', $this->credentials['email']));
-
-        $endpoint = $this->getCreateProductEndpoint();
-
-        $this->setAuthorizationHeader();
-
-        for ($i = 1; $i <= $this->request_count; $i++) { 
-            $body = [
-                'name' => sprintf('Produto %s', date('ymdhis')),
-                'description' => sprintf('Descrição do produto %s', date('ymdhis')),
-                'price' => rand(10, 1000) / 100,
-            ];
-
-            $this->initCurl();
-            $this->setCurlOpt(self::METHOD_POST, $endpoint, $body);
-
-            Message::displayMessage(sprintf('Tentativa de requisição: %d de %d', $i, $this->request_count));
-
-            $response = $this->curlExec();
-            $status = $this->getStatus();
-            $this->curlClose();            
-
-            if ($status == self::SUCCESS) {
-                $display = 'info';
-                $this->success_count++;
-            } else {
-                $display = 'error';
-                $this->errors_count++;
-            }
-
-            Message::displayMessage(sprintf('Status: %d', $status), $display);
-            sleep(5);
-        }
-
-        Message::displayMessage(sprintf('Total de requisições enviadas com sucesso: %d', $this->success_count));
-        Message::displayMessage(sprintf('Total de requisições não enviadas: %d', $this->errors_count));
-
-        return true;
     }
 
     protected function initCurl()
@@ -129,24 +90,48 @@ class Api
 
     public function getHost()
     {
+        if (!$this->host) {
+            $this->host = self::DEFAULT_HOST;
+        }
+
         return sprintf('http://%s', $this->host);
     }
 
-    protected function getCreateProductEndpoint()
+    public function getRequestCount()
+    {
+        if (!$this->request_count) {
+            $this->request_count = self::DEFAULT_REQUEST_COUNT;
+        }
+
+        return $this->request_count;
+    }
+
+    public function getCreateProductEndpoint()
     {
         $host = $this->getHost();
         return sprintf('%s/api/product', $host);
     }
 
-    protected function getUserLoginEndpoint()
+    public function getUserLoginEndpoint()
     {
         $host = $this->getHost();
         return sprintf('%s/api/login', $host);
     }
 
-    protected function getHttpHeader()
+    public function getHttpHeader()
     {
         return $this->http_header;
+    }
+
+    public function getStatusMessage($status)
+    {
+        $errorMessage = '';
+
+        if (array_key_exists($status, self::$status_list)) {
+            $errorMessage = self::$status_list[$status];
+        }
+
+        return $errorMessage;
     }
 
     protected function setAuthorizationHeader()
@@ -159,33 +144,76 @@ class Api
         $this->token = $token;
     }
 
-    protected function makeLogin()
+    public function makeLogin()
     {
         $this->initCurl();
         
         $endpoint = $this->getUserLoginEndpoint();
         $this->setCurlOpt(self::METHOD_POST, $endpoint, $this->credentials);
 
-        Message::displayMessage(sprintf('Tentativa de login com o e-mail %s', $this->credentials['email']));
-
         $response = $this->curlExec();
         $status = $this->getStatus();
 
         $this->curlClose();
 
-        if ($status != self::SUCCESS) {
-            Message::displayMessage('Não foi possível realizar a autenticação...', 'warning');
-            Message::displayMessage('Verifique as informações de login', 'warning');
-            Message::displayMessage(sprintf('Status: %d', $this->getStatus()), 'error');
-            Message::displayMessage('Finalizando execução do robô.');
+        $data = [
+            'token' => '', 
+            'status' => $status,
+            'message' => $this->getStatusMessage($status),
+        ];
 
-            exit();   
+        if ($status != self::SUCCESS) {
+            return $data;
         }
 
         $obj = json_decode($response);
-        $this->setToken($obj->data->token);
+        $data['token'] = $obj->data->token;
 
-        Message::displayMessage('Autenticação realizada com sucesso...');
+        return $data;
+    }
+
+    public function generateRequests($token)
+    {
+        $this->setToken($token);
+        $this->setAuthorizationHeader();
+
+        Message::displayMessage(sprintf('Iniciando o disparo de %s requisições...', $this->getRequestCount()));
+        Message::displayMessage(sprintf('Utilizando o host: %s', $this->getHost()));
+
+        $endpoint = $this->getCreateProductEndpoint();
+
+        for ($i = 1; $i <= $this->request_count; $i++) { 
+            $body = [
+                'name' => sprintf('Produto %s', date('ymdhis')),
+                'description' => sprintf('Descrição do produto %s', date('ymdhis')),
+                'price' => rand(10, 1000) / 100,
+            ];
+
+            $this->initCurl();
+            $this->setCurlOpt(self::METHOD_POST, $endpoint, $body);
+
+            Message::displayMessage(sprintf('Tentativa de requisição: %d de %d', $i, $this->request_count));
+
+            $response = $this->curlExec();
+            $status = $this->getStatus();
+            $this->curlClose();            
+
+            if ($status == self::SUCCESS) {
+                $display = 'info';
+                $this->success_count++;
+            } else {
+                $display = 'error';
+                $this->errors_count++;
+            }
+
+            $errorMessage = $this->getStatusMessage($status);
+
+            Message::displayMessage(sprintf('Status: %d - %s', $status, $errorMessage), $display);
+            sleep(5);
+        }
+
+        Message::displayMessage(sprintf('Total de requisições enviadas com sucesso: %d', $this->success_count));
+        Message::displayMessage(sprintf('Total de requisições não enviadas: %d', $this->errors_count));
 
         return true;
     }
