@@ -8,6 +8,7 @@ class Api
     const METHOD_POST = 'POST';
 
     const SUCCESS = 200;
+    const CREATED = 201;
     const UNAUTHORIZED = 401;
     const NOT_FOUND = 404;
     const INTERNAL_ERROR = 500;
@@ -26,6 +27,7 @@ class Api
 
     protected static $status_list = [
         self::SUCCESS => 'Sucesso',
+        self::CREATED => 'Criado',
         self::UNAUTHORIZED => 'Não autorizado',
         self::NOT_FOUND => 'Não encontrado',
         self::INTERNAL_ERROR => 'Erro interno do servidor',
@@ -198,7 +200,7 @@ class Api
             $status = $this->getStatus();
             $this->curlClose();            
 
-            if ($status == self::SUCCESS) {
+            if ($status == self::CREATED) {
                 $display = 'info';
                 $this->success_count++;
             } else {
