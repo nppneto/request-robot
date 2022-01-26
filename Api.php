@@ -43,8 +43,8 @@ class Api
         $this->errors_count = 0;
 
         $this->http_header = [
-            'Accept:application/json',
-            'Content-Type:application/json',
+            'Accept:*/*',
+            'Content-Type:application/x-www-form-urlencoded',
             'Cache-Control:no-cache',
         ];
     }
@@ -85,7 +85,7 @@ class Api
 
         if (!empty($body) && $method = 'POST') {
             curl_setopt_array($this->curl, [
-                CURLOPT_POSTFIELDS => json_encode($body),
+                CURLOPT_POSTFIELDS => http_build_query($body),
             ]);
         }
     }
